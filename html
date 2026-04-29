@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的 Web3 智能合約互動</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.11.1/ethers.umd.min.js"></script>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 40px auto; line-height: 1.6; background-color: #f4f4f9; color: #333; }
+        .box { background: #fff; border: 1px solid #ddd; padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        h2 { color: #2c3e50; text-align: center; }
+        button { padding: 10px 20px; cursor: pointer; background-color: #3498db; color: white; border: none; border-radius: 6px; transition: background 0.3s; }
+        button:hover { background-color: #2980b9; }
+        input { padding: 10px; border: 1px solid #ddd; border-radius: 6px; width: 60%; margin-right: 10px; }
+        #status { font-family: monospace; word-break: break-all; color: #e67e22; }
+        #currentValue { font-size: 1.2em; font-weight: bold; color: #27ae60; }
+    </style>
+</head>
+<body>
+    <h2>Web3 作業：改變合約變數</h2>
+    
+    <div class="box">
+        <p><strong>錢包狀態：</strong><span id="status">未連接</span></p>
+        <button id="connectBtn">1. 連接 MetaMask</button>
+    </div>
+
+    <div class="box">
+        <h3>目前合約內的數字：<span id="currentValue">等待讀取...</span></h3>
+        <button id="readBtn">2. 讀取變數 (get)</button>
+    </div>
+
+    <div class="box">
+        <input type="number" id="newValue" placeholder="輸入新的數字">
+        <button id="writeBtn">3. 更新變數 (set)</button>
+    </div>
+
+    <script>
+        // 已填入你剛剛在 Remix 部署的合約地址
+        const contractAddress = "0x9d661e19856F7814462F65320Ef1d1eAAF1bC07B";
+        
+        // 已填入 SimpleStorage 合約的標準 ABI
+        const contractABI = [
+            {
+                "inputs": [{"internalType": "uint256","name": "x","type": "uint256"}],
+                "name": "set",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "name": "get",
+                "outputs": [{"internalType": "uint256","name": "","type": "uint256"}],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "name": "storedData",
+                "outputs": [{"internalType": "uint256","name": "","type": "uint256"}],
+                "stateMutability": "view",
+                "type": "function"
+            }
+        ];
+
+        let provider;
+        let signer;
+        let contract;
+
+        // 1. 連接錢包
+        document.getElementById('connectBtn').addEventListener('click', async () => {
+            if (window.ethereum) {
+                try {
+                    await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    provider = new ethers.BrowserProvider(window.ethereum);
+                    signer = await provider.getSigner();
+                    contract = new ethers.Contract(contractAddress, contractABI, signer);
+                    
+                    const address = await signer.getAddress();
+                    document.getElementById('status').innerText = "已連接：" + address;
+                    // 連接成功後自動讀取一次
+                    document.getElementById('readBtn').click();
+                } catch (error) {
+                    console.error("連接錯誤", error);
+                    alert("連接失敗，請確認 MetaMask 已解鎖");
+                }
+            } else {
+                alert("找不到 MetaMask，請確保已安裝擴充功能");
+            }
+        });
+
+        // 2. 讀取變數
+        document.getElementById('readBtn').addEventListener('click', async () => {
+            if (!contract) return alert("請先連接錢包！");
+            try {
+                const value = await contract.get();
+                document.getElementById('currentValue').innerText = value.toString();
+            } catch (error) {
+                console.error("讀取失敗", error);
+            }
+        });
+
+        // 3. 寫入變數 (更新)
+        document.getElementById('writeBtn').addEventListener('click', async () => {
+            if (!contract) return alert("請先連接錢包！");
+            const newValue = document.getElementById('newValue').value;
+            if (newValue === "") return alert("請輸入數字");
+
+            try {
+                const tx = await contract.set(newValue);
+                document.getElementById('status').innerText = "交易發送中，請在 MetaMask 確認...";
+                
+                await tx.wait(); // 等待上鏈
+                document.getElementById('status').innerText = "交易成功！變數已更新。";
+                
+                // 重新讀取顯示最新數值
+                const updatedValue = await contract.get();
+                document.getElementById('currentValue').innerText = updatedValue.toString();
+            } catch (error) {
+                console.error("交易失敗", error);
+                document.getElementById('status').innerText = "交易失敗或被取消。";
+            }
+        });
+    </script>
+</body>
+</html>
